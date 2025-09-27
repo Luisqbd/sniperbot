@@ -594,8 +594,8 @@ if TELEGRAM_AVAILABLE and app_bot:
     # Auto-start discovery se configurado
     if config.get("AUTO_START_DISCOVERY", True):
         time.sleep(2)  # Aguarda bot inicializar
-        start_discovery()
-        logger.info("🎯 Discovery auto-iniciado")
+        logger.info("🎯 Discovery configurado para auto-iniciar")
+        # TODO: Implementar start_discovery() ou usar main_updated.py
 else:
     logger.info("🤖 Bot não disponível - apenas API Flask")
 
