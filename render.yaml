@@ -1,37 +1,76 @@
 services:
   - type: web
-    name: bot-2025
-    env: python
+    name: sniper-bot-base
+    env: docker
     branch: main
-    buildCommand: pip install -r requirements.txt
-    startCommand: ./start.sh
-    healthCheckPath: /healthz
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /health
     environment:
-      pythonVersion: "3.10.12"
-
-      # variáveis obrigatórias de infraestrutura
+      # ======== CREDENCIAIS ========
       TELEGRAM_TOKEN:        $TELEGRAM_TOKEN
       TELEGRAM_CHAT_ID:      $TELEGRAM_CHAT_ID
-      RPC_URL:               $RPC_URL
-      CHAIN_ID:              $CHAIN_ID
       PRIVATE_KEY:           $PRIVATE_KEY
+      WALLET_ADDRESS:        $WALLET_ADDRESS
 
+      # ======== REDE E RPC ========
+      RPC_URL:               $RPC_URL
+      CHAIN_ID:              "8453"
+
+      # ======== AUTH0 ========
       AUTH0_DOMAIN:          $AUTH0_DOMAIN
       AUTH0_AUDIENCE:        $AUTH0_AUDIENCE
       AUTH0_CLIENT_ID:       $AUTH0_CLIENT_ID
       AUTH0_CLIENT_SECRET:   $AUTH0_CLIENT_SECRET
 
-      ETHERSCAN_API_KEY:     $ETHERSCAN_API_KEY
+      # ======== TOKENS BASE ========
+      WETH:                  "0x4200000000000000000000000000000000000006"
+      USDC:                  "0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"
+      BASE_TOKENS:           "WETH,USDC"
 
-      # ajustes de estratégia / preço
+      # ======== DEXES ========
+      DEX_1_NAME:            "UniswapV3"
+      DEX_1_FACTORY:         "0x33128a8fC17869897Dce68Ed026d694621f6FDfD"
+      DEX_1_ROUTER:          "0x2626664c2603336E57B271c5C0b26F421741e481"
+      DEX_1_TYPE:            "v3"
+
+      DEX_2_NAME:            "AerodromeV3"
+      DEX_2_FACTORY:         "0x420DD381b31aEf6683db6B902084cB0FFECe40Da"
+      DEX_2_ROUTER:          "0xcF77a3Ba9A5CA399B7c97c74d54e5b1Beb874E43"
+      DEX_2_TYPE:            "v3"
+
+      DEX_3_NAME:            "BaseSwap"
+      DEX_3_FACTORY:         "0xFDa619b6d20975be80A10332cD39b9a4b0FAa8BB"
+      DEX_3_ROUTER:          "0x327Df1E6de05895d2ab08513aaDD9313Fe505d86"
+      DEX_3_TYPE:            "v2"
+
+      # ======== CONFIGURAÇÕES OTIMIZADAS ========
       DRY_RUN:               "false"
-      SLIPPAGE_BPS:          "50"
-      TAKE_PROFIT_PCT:       "5"
-      TRADE_SIZE_ETH:        "0.01"
-      MIN_LIQ_WETH:          "0.5"
-      INTERVAL:              "3"
-      DISCOVERY_INTERVAL:    "3"
-      PAIR_DUP_INTERVAL:     "5"
+      TRADE_SIZE_ETH:        "0.0008"        # 40% do saldo (0.001990)
+      SLIPPAGE_BPS:          "500"           # 5% para memecoins
+      TAKE_PROFIT_PCT:       "0.25"          # 25% take profit
+      STOP_LOSS_PCT:         "0.15"          # 15% stop loss
+      TRAIL_PCT:             "0.12"          # 12% trailing stop
+      MAX_POSITIONS:         "2"             # Máximo 2 posições
+      MIN_LIQ_WETH:          "0.05"          # Liquidez mínima
+
+      # ======== MEMECOINS ========
+      MEMECOIN_MIN_LIQUIDITY:    "0.05"
+      MEMECOIN_MAX_AGE_HOURS:    "24"
+      MEMECOIN_MIN_HOLDERS:      "50"
+      HONEYPOT_CHECK:            "true"
+      RUGPULL_PROTECTION:        "true"
+
+      # ======== ALTCOINS ========
+      MIN_MARKET_CAP:        "1000000"
+      MAX_MARKET_CAP:        "100000000"
+      MIN_VOLUME_24H:        "100000"
+
+      # ======== TIMING ========
+      DISCOVERY_INTERVAL:    "1"             # 1 segundo
+      EXIT_POLL_INTERVAL:    "5"             # 5 segundos
+      TX_DEADLINE_SEC:       "30"            # 30 segundos
+      AUTO_START_DISCOVERY:  "true"
 
     autoDeploy: true
     plan: starter
+    region: oregon

@@ -57,7 +57,7 @@ from token_service import gerar_meu_token_externo
 from check_balance import get_wallet_status
 from risk_manager import risk_manager
 from metrics import init_metrics_server
-from advanced_strategy import AdvancedSniperStrategy
+from advanced_sniper_strategy import advanced_sniper
 
 # Métricas Prometheus
 init_metrics_server(8000)
@@ -82,13 +82,7 @@ else:
     w3 = None
     logger.warning("Web3 não disponível - funcionalidades blockchain limitadas")
 
-# Advanced Strategy
-try:
-    advanced_sniper = AdvancedSniperStrategy()
-    logger.info("✅ AdvancedSniperStrategy inicializada")
-except Exception as e:
-    logger.error(f"❌ Erro ao inicializar AdvancedSniperStrategy: {e}")
-    advanced_sniper = None
+# Advanced Strategy já importada
 
 # Telegram Bot
 if TELEGRAM_AVAILABLE and TELE_TOKEN:

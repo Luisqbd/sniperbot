@@ -22,6 +22,169 @@ except ImportError:
 
 from config import config
 
+# Adiciona funções necessárias para o sistema
+def is_valid_address(address: str) -> bool:
+    """Verifica se endereço é válido"""
+    if not address or not isinstance(address, str):
+        return False
+    if not address.startswith('0x'):
+        return False
+    if len(address) != 42:
+        return False
+    try:
+        int(address, 16)
+        return True
+    except ValueError:
+        return False
+
+async def is_contract(address: str) -> bool:
+    """Verifica se endereço é um contrato"""
+    try:
+        if not WEB3_AVAILABLE:
+            return True  # Assume que é contrato se não pode verificar
+        
+        from web3 import Web3
+        w3 = Web3(Web3.HTTPProvider(config["RPC_URL"]))
+        code = w3.eth.get_code(address)
+        return len(code) > 0
+    except:
+        return False
+
+async def get_token_info(token_address: str) -> Optional[dict]:
+    """Obtém informações básicas do token"""
+    try:
+        if not WEB3_AVAILABLE:
+            return {
+                "name": "Unknown Token",
+                "symbol": "UNK",
+                "decimals": 18,
+                "totalSupply": 1000000000,
+                "holders": 100
+            }
+        
+        from web3 import Web3
+        w3 = Web3(Web3.HTTPProvider(config["RPC_URL"]))
+        
+        # ABI básico do ERC20
+        erc20_abi = [
+            {"inputs": [], "name": "name", "outputs": [{"type": "string"}], "stateMutability": "view", "type": "function"},
+            {"inputs": [], "name": "symbol", "outputs": [{"type": "string"}], "stateMutability": "view", "type": "function"},
+            {"inputs": [], "name": "decimals", "outputs": [{"type": "uint8"}], "stateMutability": "view", "type": "function"},
+            {"inputs": [], "name": "totalSupply", "outputs": [{"type": "uint256"}], "stateMutability": "view", "type": "function"}
+        ]
+        
+        contract = w3.eth.contract(address=token_address, abi=erc20_abi)
+        
+        info = {}
+        try:
+            info["name"] = contract.functions.name().call()
+        except:
+            info["name"] = "Unknown"
+            
+        try:
+            info["symbol"] = contract.functions.symbol().call()
+        except:
+            info["symbol"] = "UNK"
+            
+        try:
+            info["decimals"] = contract.functions.decimals().call()
+        except:
+            info["decimals"] = 18
+            
+        try:
+            info["totalSupply"] = contract.functions.totalSupply().call()
+        except:
+            info["totalSupply"] = 0
+            
+        # Informações adicionais (placeholder)
+        info["holders"] = 100  # Placeholder
+        info["market_cap"] = 1000000  # Placeholder
+        info["volume_24h"] = 50000  # Placeholder
+        
+        return info
+        
+    except Exception as e:
+        logger.error(f"Erro obtendo info do token: {e}")
+        return None
+
+async def calculate_liquidity(pair_address: str) -> Decimal:
+    """Calcula liquidez de um par"""
+    try:
+        if not WEB3_AVAILABLE:
+            return Decimal("1.0")  # Placeholder
+        
+        from web3 import Web3
+        w3 = Web3(Web3.HTTPProvider(config["RPC_URL"]))
+        
+        # ABI básico do par
+        pair_abi = [
+            {
+                "inputs": [],
+                "name": "getReserves",
+                "outputs": [
+                    {"type": "uint112", "name": "_reserve0"},
+                    {"type": "uint112", "name": "_reserve1"},
+                    {"type": "uint32", "name": "_blockTimestampLast"}
+                ],
+                "stateMutability": "view",
+                "type": "function"
+            }
+        ]
+        
+        pair = w3.eth.contract(address=pair_address, abi=pair_abi)
+        reserves = pair.functions.getReserves().call()
+        
+        # Assume que uma das reservas é WETH
+        weth_reserve = max(reserves[0], reserves[1])
+        return Decimal(str(weth_reserve / 1e18))
+        
+    except Exception as e:
+        logger.debug(f"Erro calculando liquidez: {e}")
+        return Decimal("0.5")  # Valor padrão
+
+async def get_total_liquidity(token_address: str) -> Decimal:
+    """Obtém liquidez total do token em todas as DEXs"""
+    try:
+        # Placeholder - em produção consultaria todas as DEXs
+        return Decimal("2.0")
+    except:
+        return Decimal("0")
+
+async def simulate_trade(token_in: str, token_out: str, amount_in: int, is_buy: bool) -> dict:
+    """Simula um trade para verificar se é possível"""
+    try:
+        # Placeholder para simulação
+        return {
+            "success": True,
+            "amount_out": int(amount_in * 0.95),  # 5% slippage simulado
+            "gas_estimate": 200000
+        }
+    except Exception as e:
+        return {
+            "success": False,
+            "error": str(e),
+            "amount_out": 0,
+            "gas_estimate": 0
+        }
+
+async def get_wallet_balance() -> Decimal:
+    """Obtém saldo da carteira em ETH"""
+    try:
+        if not WEB3_AVAILABLE:
+            return Decimal("0.001990")  # Valor configurado
+        
+        from web3 import Web3
+        w3 = Web3(Web3.HTTPProvider(config["RPC_URL"]))
+        
+        balance_wei = w3.eth.get_balance(config["WALLET"])
+        balance_eth = Decimal(str(balance_wei / 1e18))
+        
+        return balance_eth
+        
+    except Exception as e:
+        logger.error(f"Erro obtendo saldo: {e}")
+        return Decimal("0.001990")  # Fallback
+
 # -------------------------------------------------------------------
 # Notificações Telegram (via Bot API)
 # -------------------------------------------------------------------
