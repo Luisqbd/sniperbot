@@ -1112,13 +1112,22 @@ def main():
             application.add_handler(CommandHandler("analisar", analisar_cmd))
             application.add_handler(CallbackQueryHandler(menu_handler))
             
-            # Iniciar bot em thread separada usando run_webhook para evitar problemas de signal
+            # Iniciar bot em thread separada com event loop próprio
             def run_telegram_bot():
                 try:
-                    # Usar polling sem signal handlers
-                    application.run_polling(drop_pending_updates=True, stop_signals=None)
+                    # Criar novo event loop para a thread
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    
+                    # Executar o bot no event loop
+                    loop.run_until_complete(application.run_polling(drop_pending_updates=True, stop_signals=None))
                 except Exception as e:
                     logger.error(f"❌ Erro no bot Telegram: {e}")
+                finally:
+                    try:
+                        loop.close()
+                    except:
+                        pass
             
             telegram_thread = Thread(target=run_telegram_bot, daemon=True)
             telegram_thread.start()
