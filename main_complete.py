@@ -1133,6 +1133,37 @@ def main():
             telegram_thread.start()
             logger.info("🤖 Bot Telegram iniciado")
             
+            # Auto-start do sniper se configurado
+            if config.get('AUTO_START_SNIPER', True):
+                logger.info("🚀 Iniciando sniper automaticamente...")
+                bot_state.running = True
+                bot_state.discovery_active = True
+                # Enviar mensagem de inicio automático
+                try:
+                    async def send_autostart_message():
+                        bot = application.bot
+                        chat_id = config.get('TELEGRAM_CHAT_ID')
+                        if chat_id:
+                            await bot.send_message(
+                                chat_id=chat_id,
+                                text="🚀 *SNIPER BOT INICIADO AUTOMATICAMENTE*\n\n"
+                                     "• Monitoramento ativo\n"
+                                     "• Compras e vendas automáticas\n"
+                                     "• Todas as proteções ativadas\n\n"
+                                     f"Modo: {'🚀 TURBO' if config.get('TURBO_MODE', False) else '🐢 Normal'}\n"
+                                     f"Trade Size: {config.get('TRADE_SIZE_ETH', 0.0008)} ETH",
+                                parse_mode='MarkdownV2'
+                            )
+                    
+                    # Executar envio em thread separada
+                    import asyncio
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+                    loop.run_until_complete(send_autostart_message())
+                    loop.close()
+                except Exception as e:
+                    logger.error(f"Erro enviando mensagem de auto-start: {e}")
+            
         except Exception as e:
             logger.error(f"❌ Erro ao iniciar bot Telegram: {e}")
     else:
