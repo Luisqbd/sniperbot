@@ -311,8 +311,8 @@ class TelegramBot:
             await update.message.reply_text("⚠️ Sniper não está ativo!")
             return
             
-        # Para temporariamente mas mantém posições
-        self.user_states[update.effective_user.id] = "paused"
+        # Pausa temporariamente mas mantém posições
+        advanced_sniper.pause_strategy()
         await update.message.reply_text(
             "⏸️ *SNIPER PAUSADO*\n\n"
             "• Novas entradas desabilitadas\n"
@@ -323,17 +323,21 @@ class TelegramBot:
         
     async def resume_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Comando /resume"""
-        user_id = update.effective_user.id
-        if user_id in self.user_states and self.user_states[user_id] == "paused":
-            del self.user_states[user_id]
-            await update.message.reply_text(
-                "▶️ *SNIPER RETOMADO*\n\n"
-                "• Novas entradas habilitadas\n"
-                "• Monitoramento completo ativo",
-                parse_mode='MarkdownV2'
-            )
-        else:
+        if not advanced_sniper.is_running:
+            await update.message.reply_text("⚠️ Sniper não está ativo!")
+            return
+            
+        if not advanced_sniper.is_paused:
             await update.message.reply_text("⚠️ Sniper não está pausado!")
+            return
+            
+        advanced_sniper.resume_strategy()
+        await update.message.reply_text(
+            "▶️ *SNIPER RETOMADO*\n\n"
+            "• Novas entradas habilitadas\n"
+            "• Monitoramento completo ativo",
+            parse_mode='MarkdownV2'
+        )
             
     # ==================== MÉTODOS AUXILIARES ====================
     
@@ -839,24 +843,14 @@ class TelegramBot:
         # Modo Turbo
         elif data == "toggle_turbo":
             current_turbo = config.get("TURBO_MODE", False)
-            config["TURBO_MODE"] = not current_turbo
+            new_turbo = not current_turbo
             
-            # Atualiza parâmetros baseado no modo
-            if config["TURBO_MODE"]:
-                # Ativa modo turbo
-                config["TRADE_SIZE_ETH"] = config.get("TURBO_TRADE_SIZE_ETH", 0.0012)
-                config["TAKE_PROFIT_PCT"] = config.get("TURBO_TAKE_PROFIT_PCT", 0.5)
-                config["STOP_LOSS_PCT"] = config.get("TURBO_STOP_LOSS_PCT", 0.08)
-                config["MEMPOOL_MONITOR_INTERVAL"] = config.get("TURBO_MONITOR_INTERVAL", 0.05)
-                advanced_sniper.max_positions = config.get("TURBO_MAX_POSITIONS", 3)
+            # Usa o método da estratégia para alternar turbo
+            advanced_sniper.toggle_turbo_mode(new_turbo)
+            
+            if new_turbo:
                 status_msg = "🚀 *MODO TURBO ATIVADO*\n\n⚡️ Trading agressivo ativado\n🔥 Monitoramento acelerado\n💰 Maior risco/recompensa"
             else:
-                # Volta ao modo normal
-                config["TRADE_SIZE_ETH"] = 0.0008
-                config["TAKE_PROFIT_PCT"] = 0.3
-                config["STOP_LOSS_PCT"] = 0.12
-                config["MEMPOOL_MONITOR_INTERVAL"] = 0.2
-                advanced_sniper.max_positions = 2
                 status_msg = "🐢 *MODO NORMAL ATIVADO*\n\n✅ Trading conservador\n🛡️ Proteções ativadas\n💚 Menor risco"
                 
             await query.edit_message_text(
