@@ -1,10 +1,8 @@
-# Código para detecção de pumps e triggers automáticas
+class PumpDetector:
+    def __init__(self, config):
+        self.config = config
 
-def detectar_pumps(dados):
-    # Lógica para detectar pumps
-    pass
-
-
-def trigger_automatica():
-    # Lógica para triggers automáticas
-    pass
+    def detect(self):
+        # Lógica fictícia para detectar pumps
+        print("Detectando pump...")
+        return False
