@@ -2,9 +2,7 @@
 import logging
 import threading
 from flask import Flask, jsonify
-from utils.web3_utils import check_web3_connection
-from utils.telegram_utils import check_telegram_bot
-from utils.http_client import check_http_clients
+from utils import check_web3_connection, check_telegram_bot
 from sniper_bot import SniperBot
 from config import config
 
@@ -53,13 +51,9 @@ def run_app():
     # 1. Verificações Iniciais
     web3_ok = check_web3_connection()
     telegram_ok = check_telegram_bot()
-    flask_ok = True  # Se chegou aqui, o Flask está minimamente ok
-    http_ok = check_http_clients()
 
     logging.info(f"✅ Web3 disponível: {web3_ok}")
     logging.info(f"✅ Telegram disponível: {telegram_ok}")
-    logging.info(f"✅ Flask disponível: {flask_ok}")
-    logging.info(f"✅ HTTP clients disponíveis: {http_ok}")
 
     # 2. Inicialização do Bot
     logging.info("🚀 Iniciando Sniper Bot Completo v2.0...")
@@ -75,9 +69,6 @@ def run_app():
         logging.info("SniperBot instanciado com sucesso.")
 
         # 3. Inicia as Tarefas em Segundo Plano com a biblioteca threading
-        # Esta é a correção definitiva: passamos o objeto 'bot' diretamente
-        # para as threads, garantindo que elas usem as conexões corretas.
-
         strategy_thread = threading.Thread(target=run_all_strategies, args=(bot,), daemon=True)
         strategy_thread.start()
         logging.info("Thread de estratégias iniciada.")
@@ -90,8 +81,6 @@ def run_app():
 
     except Exception as e:
         logging.critical(f"Falha crítica ao inicializar o SniperBot ou as threads: {e}", exc_info=True)
-        # O aplicativo Flask ainda vai rodar para responder ao health check,
-        # mas os logs mostrarão a falha crítica.
         return
 
     # 4. Inicia o Servidor Flask (bloqueia a thread principal)
