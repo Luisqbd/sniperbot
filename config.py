@@ -1,207 +1,140 @@
+# -*- coding: utf-8 -*-
+"""
+Módulo de Configuração Centralizado
+
+Este módulo carrega e valida todas as configurações necessárias para a aplicação
+a partir de variáveis de ambiente. Utiliza o padrão de ter um arquivo .env
+para desenvolvimento local e espera que as variáveis sejam fornecidas diretamente
+no ambiente de produção (ex: Render, Heroku).
+
+Responsabilidades:
+- Carregar variáveis de um arquivo .env.
+- Validar a presença de variáveis obrigatórias.
+- Converter tipos de dados (int, float, bool, Decimal).
+- Fornecer um objeto `config` centralizado para toda a aplicação.
+
+Como usar:
+1. Crie um arquivo .env na raiz do projeto para desenvolvimento.
+2. Defina as variáveis necessárias (ex: TELEGRAM_BOT_TOKEN).
+3. No código da aplicação, importe o objeto `config`:
+   from config import config
+4. Acesse as variáveis:
+   token = config["TELEGRAM_BOT_TOKEN"]
+
+Para adicionar uma nova variável:
+1. Adicione a variável ao seu arquivo .env.example.
+2. Adicione a chamada `get_env` correspondente no final deste arquivo.
+"""
 import os
 import logging
-from dataclasses import dataclass
-from decimal import Decimal
-from typing import Any, Dict, List, Optional, Union
-
+from decimal import Decimal, InvalidOperation
 from dotenv import load_dotenv
 
-try:
-    from web3 import Web3
-    WEB3_AVAILABLE = True
-except ImportError:
-    WEB3_AVAILABLE = False
-
-logger = logging.getLogger(__name__)
+# Carrega as variáveis de ambiente do arquivo .env (se existir)
+# Essencial para desenvolvimento local. Em produção (Render), as variáveis
+# são injetadas diretamente no ambiente.
 load_dotenv()
 
-def str_to_bool(val: Union[str, bool]) -> bool:
-    if isinstance(val, bool):
-        return val
-    return str(val).strip().lower() in {"1", "true", "t", "yes", "y"}
+# Configuração básica de logging para o módulo de configuração
+logging.basicConfig(level=logging.INFO, format='%(asctime)s - %(levelname)s - %(message)s')
 
-def get_env(
-    key: str,
-    default: Optional[Any] = None,
-    cast: Any = str,
-    required: bool = False
-) -> Any:
-    raw = os.getenv(key, None)
-    if raw is None or (isinstance(raw, str) and raw.strip() == ""):
-        if required and default is None:
-            raise RuntimeError(f"Variável obrigatória '{key}' não informada")
-        raw = default
+def get_env(key, default=None, required=False, var_type=str):
+    """
+    Busca uma variável de ambiente, com validação e conversão de tipo.
+
+    Args:
+        key (str): Nome da variável de ambiente.
+        default: Valor padrão a ser usado se a variável não for encontrada.
+        required (bool): Se True, lança um erro se a variável não for encontrada.
+        var_type (type): O tipo para o qual o valor deve ser convertido (str, int, bool, float, Decimal).
+
+    Returns:
+        O valor da variável de ambiente, convertido para o tipo especificado.
+
+    Raises:
+        RuntimeError: Se a variável é obrigatória e não está definida.
+        ValueError: Se a conversão de tipo falhar.
+    """
+    value = os.getenv(key, default)
+
+    if required and value is None:
+        logging.error(f"Variável de ambiente obrigatória '{key}' não foi definida.")
+        raise RuntimeError(f"Variável obrigatória '{key}' não informada")
+
+    if value is None:
+        return default
+
     try:
-        return cast(raw) if raw is not None else raw
-    except Exception as e:
-        raise RuntimeError(f"Falha ao converter '{key}'={raw}: {e}")
+        if var_type == bool:
+            return value.lower() in ('true', '1', 't', 'y', 'yes')
+        if var_type == Decimal:
+            return Decimal(str(value))
+        return var_type(value)
+    except (ValueError, InvalidOperation) as e:
+        logging.error(f"Não foi possível converter a variável '{key}' com valor '{value}' para o tipo '{var_type.__name__}'. Erro: {e}")
+        raise ValueError(f"Variável '{key}' possui um formato inválido.") from e
 
-def normalize_private_key(pk: str) -> str:
-    if not pk:
-        raise ValueError("PRIVATE_KEY vazia")
-    key = pk.lower().removeprefix("0x")
-    if len(key) != 64 or any(c not in "0123456789abcdef" for c in key):
-        raise ValueError("PRIVATE_KEY inválida")
-    return key
+# --- Dicionário de Configuração ---
+# Todas as variáveis de ambiente são carregadas e armazenadas neste dicionário.
+config = {}
 
-def to_checksum(addr: str, nome: str) -> str:
-    if not WEB3_AVAILABLE:
-        # Validação básica sem Web3
-        if not addr or not addr.startswith('0x') or len(addr) != 42:
-            raise ValueError(f"Endereço '{nome}' inválido: {addr}")
-        return addr
-    
-    if not Web3.is_address(addr):
-        raise ValueError(f"Endereço '{nome}' inválido: {addr}")
-    return Web3.to_checksum_address(addr)
+# --- Configurações Essenciais ---
+config["TELEGRAM_BOT_TOKEN"] = get_env("TELEGRAM_BOT_TOKEN", required=True)
+config["TELEGRAM_CHAT_ID"] = get_env("TELEGRAM_CHAT_ID", required=True)
+config["PRIVATE_KEY"] = get_env("PRIVATE_KEY", required=True)
+config["BASE_RPC_URL"] = get_env("BASE_RPC_URL", required=True)
 
-@dataclass(frozen=True)
-class DexConfig:
-    name: str
-    factory: str
-    router: str
-    type: str  # 'v2' ou 'v3'
+# --- Configurações de Estratégia de Trading (com valores padrão otimizados) ---
+config["TRADE_SIZE_ETH"] = get_env("TRADE_SIZE_ETH", default="0.0008", var_type=Decimal)
+config["TAKE_PROFIT_PCT"] = get_env("TAKE_PROFIT_PCT", default="0.3", var_type=float)
+config["STOP_LOSS_PCT"] = get_env("STOP_LOSS_PCT", default="0.12", var_type=float)
+config["MAX_POSITIONS"] = get_env("MAX_POSITIONS", default=2, var_type=int)
+config["SLIPPAGE_BPS"] = get_env("SLIPPAGE_BPS", default=500, var_type=int) # 5%
 
-def load_dexes() -> List[DexConfig]:
-    dexes: List[DexConfig] = []
-    idx = 1
-    while True:
-        prefix = f"DEX_{idx}_"
-        nome = os.getenv(prefix + "NAME")
-        if not nome:
-            break
-        factory = to_checksum(get_env(prefix + "FACTORY", required=True), f"{nome} factory")
-        router  = to_checksum(get_env(prefix + "ROUTER",  required=True), f"{nome} router")
-        dtype   = get_env(prefix + "TYPE", default="v2").lower()
-        if dtype not in ("v2", "v3"):
-            raise ValueError(f"Tipo inválido para {nome}: {dtype}")
-        dexes.append(DexConfig(name=nome, factory=factory, router=router, type=dtype))
-        idx += 1
-    if not dexes:
-        logger.warning("Nenhuma DEX configurada. Verifique DEX_1_* no .env")
-    return dexes
+# --- Configurações de Descoberta de Memecoins ---
+config["MEMECOIN_MIN_LIQUIDITY"] = get_env("MEMECOIN_MIN_LIQUIDITY", default="0.05", var_type=Decimal)
+config["MEMECOIN_MIN_HOLDERS"] = get_env("MEMECOIN_MIN_HOLDERS", default=50, var_type=int)
+config["MEMECOIN_MAX_INVESTMENT"] = get_env("MEMECOIN_MAX_INVESTMENT", default="0.0008", var_type=Decimal)
+config["MEMECOIN_TARGET_PROFIT"] = get_env("MEMECOIN_TARGET_PROFIT", default=2.0, var_type=float) # 2x
 
-# ─── Core settings ────────────────────────────────────────────────────
-RPC_URL    = get_env("RPC_URL", default="https://mainnet.base.org")
-CHAIN_ID   = get_env("CHAIN_ID", default=8453, cast=int)
+# --- Configurações de Trading de Altcoins (Swing Trade) ---
+config["ALTCOIN_MIN_MARKET_CAP"] = get_env("ALTCOIN_MIN_MARKET_CAP", default=100000, var_type=int)
+config["ALTCOIN_MAX_MARKET_CAP"] = get_env("ALTCOIN_MAX_MARKET_CAP", default=10000000, var_type=int)
+config["ALTCOIN_PROFIT_REINVEST_PCT"] = get_env("ALTCOIN_PROFIT_REINVEST_PCT", default=0.5, var_type=float)
 
-PRIVATE_KEY = normalize_private_key(get_env("PRIVATE_KEY", required=True))
-WALLET      = get_env("WALLET_ADDRESS", default=None)
-if WALLET:
-    WALLET = to_checksum(WALLET, "WALLET_ADDRESS")
-else:
-    # carrega a partir da chave privada
-    if WEB3_AVAILABLE:
-        WALLET = Web3.to_checksum_address(Web3(Web3.HTTPProvider(RPC_URL)).eth.account.from_key(PRIVATE_KEY).address)
-    else:
-        # Fallback: usar endereço padrão para testes
-        WALLET = "0x0000000000000000000000000000000000000000"
-        logger.warning("Web3 não disponível - usando endereço padrão para WALLET")
+# --- Configurações de Modo Turbo ---
+config["TURBO_MODE"] = get_env("TURBO_MODE", default=False, var_type=bool)
+config["TURBO_TRADE_SIZE_ETH"] = get_env("TURBO_TRADE_SIZE_ETH", default="0.0012", var_type=Decimal)
+config["TURBO_STOP_LOSS_PCT"] = get_env("TURBO_STOP_LOSS_PCT", default=0.08, var_type=float)
+config["TURBO_MAX_POSITIONS"] = get_env("TURBO_MAX_POSITIONS", default=3, var_type=int)
 
-WETH = to_checksum(get_env("WETH", default="0x4200000000000000000000000000000000000006"), "WETH")
-USDC = to_checksum(get_env("USDC", default="0x833589fCD6eDb6E08f4c7C32D4f71b54bdA02913"), "USDC")
+# --- Configurações de Automação ---
+config["AUTO_START_SNIPER"] = get_env("AUTO_START_SNIPER", default=True, var_type=bool)
 
-AUTH0_DOMAIN        = get_env("AUTH0_DOMAIN",        required=True)
-AUTH0_AUDIENCE      = get_env("AUTH0_AUDIENCE",      required=True)
-AUTH0_CLIENT_ID     = get_env("AUTH0_CLIENT_ID",     required=True)
-AUTH0_CLIENT_SECRET = get_env("AUTH0_CLIENT_SECRET", required=True)
+# --- Configurações de Proteção e Fallback ---
+config["BASESCAN_API_KEY"] = get_env("BASESCAN_API_KEY", required=True)
+config["HONEYPOT_CHECK_ENABLED"] = get_env("HONEYPOT_CHECK_ENABLED", default=True, var_type=bool)
 
-TELEGRAM_TOKEN = get_env("TELEGRAM_TOKEN", required=True)
-TELEGRAM_CHAT  = get_env("TELEGRAM_CHAT_ID", cast=int, default=0)
+# --- Configurações de Desempenho e Timing ---
+config["DISCOVERY_INTERVAL"] = get_env("DISCOVERY_INTERVAL", default=1, var_type=int)
+config["MEMPOOL_MONITOR_INTERVAL"] = get_env("MEMPOOL_MONITOR_INTERVAL", default=0.2, var_type=float)
+config["EXIT_POLL_INTERVAL"] = get_env("EXIT_POLL_INTERVAL", default=3, var_type=int)
 
-DRY_RUN            = str_to_bool(get_env("DRY_RUN", default="true"))
-DISCOVERY_INTERVAL = get_env("DISCOVERY_INTERVAL", default=3, cast=int)
-TRADE_SIZE_ETH     = get_env("TRADE_SIZE_ETH", default=0.1, cast=float)
-MIN_LIQ_WETH       = get_env("MIN_LIQ_WETH", default=Decimal("0.5"), cast=Decimal)
-TAKE_PROFIT_PCT    = get_env("TAKE_PROFIT_PCT", default=0.2, cast=float)
-STOP_LOSS_PCT      = get_env("STOP_LOSS_PCT", default=0.05, cast=float)
-EXIT_POLL_INTERVAL = get_env("EXIT_POLL_INTERVAL", default=15, cast=int)
+# --- Configurações de Autenticação (Opcionais) ---
+# **CORREÇÃO APLICADA AQUI**
+# Estas variáveis são para um possível painel web e não são essenciais para o bot do Telegram.
+# Torná-las opcionais (`required=False`) permite que o bot funcione sem elas.
+config["AUTH0_DOMAIN"]        = get_env("AUTH0_DOMAIN",        required=False)
+config["AUTH0_CLIENT_ID"]     = get_env("AUTH0_CLIENT_ID",     required=False)
+config["AUTH0_CLIENT_SECRET"] = get_env("AUTH0_CLIENT_SECRET", required=False)
+config["AUTH0_AUDIENCE"]      = get_env("AUTH0_AUDIENCE",      required=False)
+config["FLASK_SECRET_KEY"]    = get_env("FLASK_SECRET_KEY",    default="uma-chave-secreta-default-para-desenvolvimento")
 
-# ─── Newly added vars ──────────────────────────────────────────────────
-BASE_TOKENS_RAW   = get_env("BASE_TOKENS", default="", cast=str)
-BASE_TOKENS       = [t.strip().lower() for t in BASE_TOKENS_RAW.split(",") if t.strip()]
-
-SLIPPAGE_BPS      = get_env("SLIPPAGE_BPS", default=250, cast=int)
-TRAIL_PCT         = get_env("TRAIL_PCT", default=0.08, cast=float)
-TX_DEADLINE_SEC   = get_env("TX_DEADLINE_SEC", default=60, cast=int)
-
-DEXES = load_dexes()
-
-# ─── Turbo Mode settings ───────────────────────────────────────────────
-TURBO_MODE = str_to_bool(get_env("TURBO_MODE", default="false"))
-TURBO_TRADE_SIZE_ETH = get_env("TURBO_TRADE_SIZE_ETH", default=0.0012, cast=float)
-TURBO_TAKE_PROFIT_PCT = get_env("TURBO_TAKE_PROFIT_PCT", default=0.5, cast=float)
-TURBO_STOP_LOSS_PCT = get_env("TURBO_STOP_LOSS_PCT", default=0.08, cast=float)
-TURBO_MONITOR_INTERVAL = get_env("TURBO_MONITOR_INTERVAL", default=0.05, cast=float)
-TURBO_MAX_POSITIONS = get_env("TURBO_MAX_POSITIONS", default=3, cast=int)
-
-# ─── Memecoin settings ─────────────────────────────────────────────────
-MEMECOIN_MIN_LIQUIDITY = get_env("MEMECOIN_MIN_LIQUIDITY", default=0.05, cast=float)
-MEMECOIN_MIN_HOLDERS = get_env("MEMECOIN_MIN_HOLDERS", default=50, cast=int)
-MEMECOIN_MAX_AGE_HOURS = get_env("MEMECOIN_MAX_AGE_HOURS", default=24, cast=int)
-MEMECOIN_MAX_INVESTMENT = get_env("MEMECOIN_MAX_INVESTMENT", default=0.0008, cast=float)
-MEMECOIN_TARGET_PROFIT = get_env("MEMECOIN_TARGET_PROFIT", default=2.0, cast=float)
-
-# ─── Altcoin settings ──────────────────────────────────────────────────
-ALTCOIN_MIN_MARKET_CAP = get_env("ALTCOIN_MIN_MARKET_CAP", default=100000, cast=int)
-ALTCOIN_MAX_MARKET_CAP = get_env("ALTCOIN_MAX_MARKET_CAP", default=10000000, cast=int)
-ALTCOIN_MIN_VOLUME_24H = get_env("ALTCOIN_MIN_VOLUME_24H", default=50000, cast=int)
-ALTCOIN_PROFIT_REINVEST_PCT = get_env("ALTCOIN_PROFIT_REINVEST_PCT", default=0.5, cast=float)
-
-# ─── Monitoring settings ───────────────────────────────────────────────
-MEMPOOL_MONITOR_INTERVAL = get_env("MEMPOOL_MONITOR_INTERVAL", default=0.2, cast=float)
-AUTO_START_SNIPER = str_to_bool(get_env("AUTO_START_SNIPER", default="true"))
-ENABLE_REBALANCING = str_to_bool(get_env("ENABLE_REBALANCING", default="true"))
-MAX_GAS_PRICE_GWEI = get_env("MAX_GAS_PRICE_GWEI", default=50, cast=int)
-
-config: Dict[str, Any] = {
-    "RPC_URL":            RPC_URL,
-    "CHAIN_ID":           CHAIN_ID,
-    "PRIVATE_KEY":        PRIVATE_KEY,
-    "WALLET":             WALLET,
-    "WALLET_ADDRESS":     WALLET,
-    "WETH":               WETH,
-    "USDC":               USDC,
-    "AUTH0_DOMAIN":       AUTH0_DOMAIN,
-    "AUTH0_AUDIENCE":     AUTH0_AUDIENCE,
-    "AUTH0_CLIENT_ID":    AUTH0_CLIENT_ID,
-    "AUTH0_CLIENT_SECRET":AUTH0_CLIENT_SECRET,
-    "TELEGRAM_TOKEN":     TELEGRAM_TOKEN,
-    "TELEGRAM_CHAT_ID":   TELEGRAM_CHAT,
-    "DRY_RUN":            DRY_RUN,
-    "DISCOVERY_INTERVAL": DISCOVERY_INTERVAL,
-    "TRADE_SIZE_ETH":     TRADE_SIZE_ETH,
-    "MIN_LIQ_WETH":       MIN_LIQ_WETH,
-    "TAKE_PROFIT_PCT":    TAKE_PROFIT_PCT,
-    "STOP_LOSS_PCT":      STOP_LOSS_PCT,
-    "EXIT_POLL_INTERVAL": EXIT_POLL_INTERVAL,
-    "BASE_TOKENS":        BASE_TOKENS,
-    "SLIPPAGE_BPS":       SLIPPAGE_BPS,
-    "DEFAULT_SLIPPAGE_BPS": SLIPPAGE_BPS,
-    "TRAIL_PCT":          TRAIL_PCT,
-    "TX_DEADLINE_SEC":    TX_DEADLINE_SEC,
-    "DEXES":              DEXES,
-    # Turbo mode
-    "TURBO_MODE":         TURBO_MODE,
-    "TURBO_TRADE_SIZE_ETH": TURBO_TRADE_SIZE_ETH,
-    "TURBO_TAKE_PROFIT_PCT": TURBO_TAKE_PROFIT_PCT,
-    "TURBO_STOP_LOSS_PCT": TURBO_STOP_LOSS_PCT,
-    "TURBO_MONITOR_INTERVAL": TURBO_MONITOR_INTERVAL,
-    "TURBO_MAX_POSITIONS": TURBO_MAX_POSITIONS,
-    # Memecoin
-    "MEMECOIN_MIN_LIQUIDITY": MEMECOIN_MIN_LIQUIDITY,
-    "MEMECOIN_MIN_HOLDERS": MEMECOIN_MIN_HOLDERS,
-    "MEMECOIN_MAX_AGE_HOURS": MEMECOIN_MAX_AGE_HOURS,
-    "MEMECOIN_MAX_INVESTMENT": MEMECOIN_MAX_INVESTMENT,
-    "MEMECOIN_TARGET_PROFIT": MEMECOIN_TARGET_PROFIT,
-    # Altcoin
-    "ALTCOIN_MIN_MARKET_CAP": ALTCOIN_MIN_MARKET_CAP,
-    "ALTCOIN_MAX_MARKET_CAP": ALTCOIN_MAX_MARKET_CAP,
-    "ALTCOIN_MIN_VOLUME_24H": ALTCOIN_MIN_VOLUME_24H,
-    "ALTCOIN_PROFIT_REINVEST_PCT": ALTCOIN_PROFIT_REINVEST_PCT,
-    # Monitoring
-    "MEMPOOL_MONITOR_INTERVAL": MEMPOOL_MONITOR_INTERVAL,
-    "AUTO_START_SNIPER": AUTO_START_SNIPER,
-    "ENABLE_REBALANCING": ENABLE_REBALANCING,
-    "MAX_GAS_PRICE_GWEI": MAX_GAS_PRICE_GWEI,
-}
+# --- Log de verificação ---
+# Loga uma mensagem para confirmar que o módulo de configuração foi carregado.
+# Não loga os valores das chaves por segurança.
+logging.info("Módulo de configuração carregado. %d variáveis processadas.", len(config))
+if not config.get("TELEGRAM_BOT_TOKEN"):
+    logging.warning("Token do Telegram não encontrado. O bot não funcionará.")
+if not config.get("PRIVATE_KEY"):
+    logging.warning("Chave privada não encontrada. As transações não funcionarão.")
