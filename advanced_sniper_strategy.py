@@ -76,35 +76,36 @@ class AdvancedSniperStrategy:
     def __init__(self):
         self.w3 = Web3(Web3.HTTPProvider(config["RPC_URL"]))
         self.is_running = False
+        self.is_paused = False  # Estado de pausa
         self.positions: Dict[str, Position] = {}
         self.processed_tokens: Set[str] = set()
         
-        # Configurações da estratégia
+        # Configurações da estratégia (ajustadas dinamicamente pelo modo turbo)
         self.max_positions = config.get("MAX_POSITIONS", 3)
         self.trade_size_eth = Decimal(str(config.get("TRADE_SIZE_ETH", 0.001)))
         self.min_liquidity = Decimal(str(config.get("MEMECOIN_MIN_LIQUIDITY", 0.05)))
         
         # Configurações de take profit e stop loss
         self.take_profit_levels = [0.25, 0.50, 1.0, 2.0]  # 25%, 50%, 100%, 200%
-        self.stop_loss_pct = 0.15  # 15%
+        self.stop_loss_pct = config.get("STOP_LOSS_PCT", 0.15)  # 15%
         self.trailing_stop_pct = 0.12  # 12%
         
         # Configurações de memecoin
         self.memecoin_config = {
-            "max_investment": Decimal("0.008"),  # Máximo $8 por token
-            "target_profit": 2.0,  # 2x de lucro
-            "max_age_hours": 24,
-            "min_holders": 50,
+            "max_investment": Decimal(str(config.get("MEMECOIN_MAX_INVESTMENT", 0.008))),
+            "target_profit": config.get("MEMECOIN_TARGET_PROFIT", 2.0),
+            "max_age_hours": config.get("MEMECOIN_MAX_AGE_HOURS", 24),
+            "min_holders": config.get("MEMECOIN_MIN_HOLDERS", 50),
             "social_score_threshold": 0.3
         }
         
         # Configurações de altcoin
         self.altcoin_config = {
-            "min_market_cap": 1_000_000,  # $1M
-            "max_market_cap": 100_000_000,  # $100M
-            "min_volume_24h": 100_000,  # $100k
+            "min_market_cap": config.get("ALTCOIN_MIN_MARKET_CAP", 1_000_000),
+            "max_market_cap": config.get("ALTCOIN_MAX_MARKET_CAP", 100_000_000),
+            "min_volume_24h": config.get("ALTCOIN_MIN_VOLUME_24H", 100_000),
             "rebalance_interval": 86400,  # 24 horas
-            "profit_reinvest_pct": 0.5  # 50% dos lucros
+            "profit_reinvest_pct": config.get("ALTCOIN_PROFIT_REINVEST_PCT", 0.5)
         }
         
         # Estatísticas
@@ -116,6 +117,11 @@ class AdvancedSniperStrategy:
             "worst_trade": 0.0,
             "start_time": int(time.time())
         }
+        
+        logger.info(f"✅ Estratégia inicializada - Modo Turbo: {config.get('TURBO_MODE', False)}")
+        logger.info(f"💰 Trade Size: {self.trade_size_eth} ETH")
+        logger.info(f"🛡️ Stop Loss: {self.stop_loss_pct*100:.1f}%")
+        logger.info(f"📈 Take Profit: {config.get('TAKE_PROFIT_PCT', 0.3)*100:.1f}%")
         
     async def start_strategy(self):
         """Inicia a estratégia de sniper"""
@@ -147,10 +153,42 @@ class AdvancedSniperStrategy:
         logger.info("🛑 Estratégia de sniper parada")
         await send_telegram_alert("🛑 Sniper Bot parado")
         
+    def pause_strategy(self):
+        """Pausa a estratégia temporariamente (mantém posições)"""
+        self.is_paused = True
+        logger.info("⏸️ Estratégia pausada - posições continuam monitoradas")
+        
+    def resume_strategy(self):
+        """Retoma a estratégia"""
+        self.is_paused = False
+        logger.info("▶️ Estratégia retomada")
+        
+    def toggle_turbo_mode(self, enable: bool):
+        """Ativa ou desativa modo turbo"""
+        config["TURBO_MODE"] = enable
+        
+        if enable:
+            # Ativa modo turbo
+            self.trade_size_eth = Decimal(str(config.get("TURBO_TRADE_SIZE_ETH", 0.0012)))
+            self.stop_loss_pct = config.get("TURBO_STOP_LOSS_PCT", 0.08)
+            self.max_positions = config.get("TURBO_MAX_POSITIONS", 3)
+            logger.info("🚀 Modo TURBO ativado - Trading agressivo")
+        else:
+            # Volta ao modo normal
+            self.trade_size_eth = Decimal(str(config.get("TRADE_SIZE_ETH", 0.0008)))
+            self.stop_loss_pct = config.get("STOP_LOSS_PCT", 0.12)
+            self.max_positions = config.get("MAX_POSITIONS", 2)
+            logger.info("🐢 Modo NORMAL ativado - Trading conservador")
+        
     async def _on_new_token(self, event: NewTokenEvent):
         """Callback para novos tokens detectados"""
         try:
             if not self.is_running:
+                return
+                
+            # Verifica se estratégia está pausada
+            if self.is_paused:
+                logger.debug(f"⏸️ Estratégia pausada - ignorando token {event.token_address[:10]}...")
                 return
                 
             token_address = event.token_address

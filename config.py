@@ -127,6 +127,33 @@ TX_DEADLINE_SEC   = get_env("TX_DEADLINE_SEC", default=60, cast=int)
 
 DEXES = load_dexes()
 
+# ─── Turbo Mode settings ───────────────────────────────────────────────
+TURBO_MODE = str_to_bool(get_env("TURBO_MODE", default="false"))
+TURBO_TRADE_SIZE_ETH = get_env("TURBO_TRADE_SIZE_ETH", default=0.0012, cast=float)
+TURBO_TAKE_PROFIT_PCT = get_env("TURBO_TAKE_PROFIT_PCT", default=0.5, cast=float)
+TURBO_STOP_LOSS_PCT = get_env("TURBO_STOP_LOSS_PCT", default=0.08, cast=float)
+TURBO_MONITOR_INTERVAL = get_env("TURBO_MONITOR_INTERVAL", default=0.05, cast=float)
+TURBO_MAX_POSITIONS = get_env("TURBO_MAX_POSITIONS", default=3, cast=int)
+
+# ─── Memecoin settings ─────────────────────────────────────────────────
+MEMECOIN_MIN_LIQUIDITY = get_env("MEMECOIN_MIN_LIQUIDITY", default=0.05, cast=float)
+MEMECOIN_MIN_HOLDERS = get_env("MEMECOIN_MIN_HOLDERS", default=50, cast=int)
+MEMECOIN_MAX_AGE_HOURS = get_env("MEMECOIN_MAX_AGE_HOURS", default=24, cast=int)
+MEMECOIN_MAX_INVESTMENT = get_env("MEMECOIN_MAX_INVESTMENT", default=0.0008, cast=float)
+MEMECOIN_TARGET_PROFIT = get_env("MEMECOIN_TARGET_PROFIT", default=2.0, cast=float)
+
+# ─── Altcoin settings ──────────────────────────────────────────────────
+ALTCOIN_MIN_MARKET_CAP = get_env("ALTCOIN_MIN_MARKET_CAP", default=100000, cast=int)
+ALTCOIN_MAX_MARKET_CAP = get_env("ALTCOIN_MAX_MARKET_CAP", default=10000000, cast=int)
+ALTCOIN_MIN_VOLUME_24H = get_env("ALTCOIN_MIN_VOLUME_24H", default=50000, cast=int)
+ALTCOIN_PROFIT_REINVEST_PCT = get_env("ALTCOIN_PROFIT_REINVEST_PCT", default=0.5, cast=float)
+
+# ─── Monitoring settings ───────────────────────────────────────────────
+MEMPOOL_MONITOR_INTERVAL = get_env("MEMPOOL_MONITOR_INTERVAL", default=0.2, cast=float)
+AUTO_START_SNIPER = str_to_bool(get_env("AUTO_START_SNIPER", default="true"))
+ENABLE_REBALANCING = str_to_bool(get_env("ENABLE_REBALANCING", default="true"))
+MAX_GAS_PRICE_GWEI = get_env("MAX_GAS_PRICE_GWEI", default=50, cast=int)
+
 config: Dict[str, Any] = {
     "RPC_URL":            RPC_URL,
     "CHAIN_ID":           CHAIN_ID,
@@ -154,4 +181,27 @@ config: Dict[str, Any] = {
     "TRAIL_PCT":          TRAIL_PCT,
     "TX_DEADLINE_SEC":    TX_DEADLINE_SEC,
     "DEXES":              DEXES,
+    # Turbo mode
+    "TURBO_MODE":         TURBO_MODE,
+    "TURBO_TRADE_SIZE_ETH": TURBO_TRADE_SIZE_ETH,
+    "TURBO_TAKE_PROFIT_PCT": TURBO_TAKE_PROFIT_PCT,
+    "TURBO_STOP_LOSS_PCT": TURBO_STOP_LOSS_PCT,
+    "TURBO_MONITOR_INTERVAL": TURBO_MONITOR_INTERVAL,
+    "TURBO_MAX_POSITIONS": TURBO_MAX_POSITIONS,
+    # Memecoin
+    "MEMECOIN_MIN_LIQUIDITY": MEMECOIN_MIN_LIQUIDITY,
+    "MEMECOIN_MIN_HOLDERS": MEMECOIN_MIN_HOLDERS,
+    "MEMECOIN_MAX_AGE_HOURS": MEMECOIN_MAX_AGE_HOURS,
+    "MEMECOIN_MAX_INVESTMENT": MEMECOIN_MAX_INVESTMENT,
+    "MEMECOIN_TARGET_PROFIT": MEMECOIN_TARGET_PROFIT,
+    # Altcoin
+    "ALTCOIN_MIN_MARKET_CAP": ALTCOIN_MIN_MARKET_CAP,
+    "ALTCOIN_MAX_MARKET_CAP": ALTCOIN_MAX_MARKET_CAP,
+    "ALTCOIN_MIN_VOLUME_24H": ALTCOIN_MIN_VOLUME_24H,
+    "ALTCOIN_PROFIT_REINVEST_PCT": ALTCOIN_PROFIT_REINVEST_PCT,
+    # Monitoring
+    "MEMPOOL_MONITOR_INTERVAL": MEMPOOL_MONITOR_INTERVAL,
+    "AUTO_START_SNIPER": AUTO_START_SNIPER,
+    "ENABLE_REBALANCING": ENABLE_REBALANCING,
+    "MAX_GAS_PRICE_GWEI": MAX_GAS_PRICE_GWEI,
 }

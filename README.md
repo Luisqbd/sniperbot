@@ -9,6 +9,8 @@ Bot avançado de trading automatizado para criptomoedas na rede Base, especializ
 - **Swing Trading para Altcoins**: Trading automatizado de tokens DeFi consolidados com rebalanceamento de portfólio
 - **Take Profit Multi-nível**: Saídas parciais em 25%, 50%, 100% e 200% de lucro
 - **Trailing Stop Loss**: Proteção dinâmica contra perdas com ajuste automático
+- **🚀 Modo Turbo**: Trading agressivo com monitoramento acelerado (50ms) e maiores recompensas
+- **🤖 Auto-Start**: Inicialização automática do sniper ao ligar o bot
 
 ### 🔒 Proteções e Segurança
 - **Verificação de Honeypots**: Detecção automática de tokens maliciosos
@@ -19,8 +21,12 @@ Bot avançado de trading automatizado para criptomoedas na rede Base, especializ
 ### 📱 Interface Telegram
 - **Comandos Completos**: `/start`, `/status`, `/saldo`, `/posicoes`, `/config`, `/analisar`
 - **Botões Interativos**: Controle total via interface gráfica
+- **🚀 Modo Turbo**: Ativar/desativar com um clique
+- **⏸️ Pause/Resume**: Pausar temporariamente sem perder posições
+- **🚨 Parada de Emergência**: Fecha todas as posições imediatamente
 - **Alertas em Tempo Real**: Notificações de trades, lucros e oportunidades
 - **Análise de Tokens**: Verificação instantânea de segurança e potencial
+- **Auto-Start**: Bot inicia automaticamente ao ligar
 
 ### 🏗️ Infraestrutura
 - **Deploy Automático**: Dockerfile e render.yaml configurados
@@ -30,13 +36,36 @@ Bot avançado de trading automatizado para criptomoedas na rede Base, especializ
 
 ## ⚙️ Configuração Otimizada
 
+### 🚀 Modo Turbo vs Normal
+
+#### Modo Normal (Conservador)
+```env
+TURBO_MODE=false
+TRADE_SIZE_ETH=0.0008          # 40% do saldo
+TAKE_PROFIT_PCT=0.3            # Take profit em 30%
+STOP_LOSS_PCT=0.12             # Stop loss em 12%
+MEMPOOL_MONITOR_INTERVAL=0.2   # Monitoramento a cada 200ms
+MAX_POSITIONS=2                # Máximo 2 posições
+```
+
+#### Modo Turbo (Agressivo)
+```env
+TURBO_MODE=true
+TURBO_TRADE_SIZE_ETH=0.0012    # 60% do saldo
+TURBO_TAKE_PROFIT_PCT=0.5      # Take profit em 50%
+TURBO_STOP_LOSS_PCT=0.08       # Stop loss em 8%
+TURBO_MONITOR_INTERVAL=0.05    # Monitoramento a cada 50ms
+TURBO_MAX_POSITIONS=3          # Máximo 3 posições
+```
+
 ### Parâmetros de Trading (Otimizados para saldo de 0.001990 WETH)
 ```env
 TRADE_SIZE_ETH=0.0008          # Tamanho por trade (40% do saldo)
-TAKE_PROFIT_PCT=0.25           # Take profit em 25%
-STOP_LOSS_PCT=0.15             # Stop loss em 15%
+TAKE_PROFIT_PCT=0.3            # Take profit em 30%
+STOP_LOSS_PCT=0.12             # Stop loss em 12%
 SLIPPAGE_BPS=500               # Slippage de 5%
 MAX_POSITIONS=2                # Máximo 2 posições simultâneas
+MAX_GAS_PRICE_GWEI=50          # Máximo 50 gwei de gas
 ```
 
 ### Detecção de Memecoins
@@ -44,6 +73,16 @@ MAX_POSITIONS=2                # Máximo 2 posições simultâneas
 MEMECOIN_MIN_LIQUIDITY=0.05    # Mínimo 0.05 ETH de liquidez
 MEMECOIN_MIN_HOLDERS=50        # Mínimo 50 holders
 MEMECOIN_MAX_AGE_HOURS=24      # Máximo 24h de idade
+MEMECOIN_MAX_INVESTMENT=0.0008 # Máximo 0.0008 ETH por memecoin
+MEMECOIN_TARGET_PROFIT=2.0     # Target de 2x de lucro
+```
+
+### Configurações de Altcoins
+```env
+ALTCOIN_MIN_MARKET_CAP=100000      # Mínimo $100k de market cap
+ALTCOIN_MAX_MARKET_CAP=10000000    # Máximo $10M de market cap
+ALTCOIN_MIN_VOLUME_24H=50000       # Mínimo $50k de volume 24h
+ALTCOIN_PROFIT_REINVEST_PCT=0.5    # Reinvestir 50% dos lucros
 ```
 
 ### Timing Otimizado
@@ -51,6 +90,8 @@ MEMECOIN_MAX_AGE_HOURS=24      # Máximo 24h de idade
 DISCOVERY_INTERVAL=1           # Descoberta a cada 1s
 MEMPOOL_MONITOR_INTERVAL=0.2   # Mempool a cada 200ms
 EXIT_POLL_INTERVAL=3           # Verificação de saída a cada 3s
+AUTO_START_SNIPER=true         # Inicia sniper automaticamente
+ENABLE_REBALANCING=true        # Habilita rebalanceamento automático
 ```
 
 ## 🛠️ Instalação e Configuração
@@ -80,7 +121,22 @@ TELEGRAM_CHAT_ID=seu_chat_id
 
 # Modo
 DRY_RUN=false  # true para testes, false para trading real
+
+# Auto-start (Recomendado)
+AUTO_START_SNIPER=true  # Inicia automaticamente
+TURBO_MODE=false        # false = conservador, true = agressivo
 ```
+
+### 🤖 Sobre o Auto-Start
+
+Quando `AUTO_START_SNIPER=true`:
+- ✅ Bot inicia trading automaticamente ao ligar
+- ✅ Compras e vendas totalmente automáticas
+- ✅ Notificação enviada via Telegram no início
+- ✅ Todas as proteções ativadas desde o início
+- 🎯 Você só precisa configurar uma vez e deixar rodando
+
+**Recomendação:** Deixe `true` para operação 24/7 autônoma.
 
 ### 3. Instale as Dependências
 ```bash
@@ -132,7 +188,83 @@ python main_updated.py --log-level DEBUG
 - **📊 Estatísticas** - Performance detalhada
 - **⚙️ Configurações** - Ajustar parâmetros
 
-## 🔧 Deploy no Render
+## 📱 Comandos do Telegram
+
+### Comandos Principais
+```
+/start      - Iniciar bot e mostrar menu principal
+/help       - Mostrar ajuda e comandos disponíveis
+/status     - Status atual do bot e estratégias
+/balance    - Saldo da carteira (ETH e WETH)
+/positions  - Posições ativas
+/stats      - Estatísticas de performance
+/config     - Configurações do bot
+```
+
+### Comandos de Controle
+```
+/snipe      - Iniciar sniper automático
+/stop       - Parar sniper
+/pause      - Pausar temporariamente (mantém posições)
+/resume     - Retomar operação
+```
+
+### Comandos de Análise
+```
+/analyze <token>  - Analisar token específico
+/check <token>    - Verificar segurança de token
+/price <token>    - Consultar preço de token
+```
+
+### Comandos de Configuração
+```
+/set_trade_size <valor>    - Alterar tamanho do trade (ex: 0.001)
+/set_stop_loss <valor>     - Alterar stop loss em % (ex: 15)
+/set_take_profit <níveis>  - Alterar take profit (ex: 25 50 100 200)
+/set_max_positions <valor> - Alterar máximo de posições (ex: 3)
+```
+
+### Botões Interativos
+
+#### Menu Principal
+- **🚀 Iniciar Sniper** - Inicia o sniper automático
+- **🛑 Parar Sniper** - Para o sniper
+- **📊 Status** - Mostra status detalhado
+- **💰 Saldo** - Exibe saldo da carteira
+- **🎯 Posições** - Lista posições ativas
+- **📈 Estatísticas** - Mostra estatísticas de performance
+- **⚙️ Configurações** - Abre menu de configurações
+- **🚀/🐢 Modo Turbo** - Alterna entre modo turbo e normal
+- **🏓 Ping** - Verifica se o bot está respondendo
+- **🚨 PARADA DE EMERGÊNCIA** - Para tudo e fecha todas as posições
+
+#### Menu de Configurações
+- **💰 Trade Size** - Alterar tamanho do trade
+- **🛡️ Stop Loss** - Alterar stop loss
+- **📈 Take Profit** - Alterar take profit
+- **🎯 Max Posições** - Alterar máximo de posições simultâneas
+- **🔙 Voltar** - Volta ao menu principal
+
+### 🚀 Modo Turbo
+
+O modo turbo altera automaticamente os seguintes parâmetros:
+
+**Quando ATIVADO:**
+- ⚡ Monitoramento a cada 50ms (vs 200ms normal)
+- 💰 Trade size aumentado para 0.0012 ETH
+- 📈 Take profit em 50% (vs 30% normal)
+- 🛡️ Stop loss em 8% (vs 12% normal)
+- 🎯 Permite até 3 posições simultâneas
+
+**Quando DESATIVADO:**
+- 🐢 Volta aos parâmetros conservadores
+- ✅ Proteções máximas ativadas
+- 💚 Menor risco
+
+**Como usar:**
+1. Clique no botão "🚀 TURBO" ou "🐢 Normal" no menu principal
+2. O bot alterna automaticamente entre os modos
+3. Uma mensagem confirma a mudança
 
 ### 1. Conecte o Repositório
 - Acesse [Render.com](https://render.com)

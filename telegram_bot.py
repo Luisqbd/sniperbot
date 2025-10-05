@@ -187,6 +187,11 @@ class TelegramBot:
             "• `/set_trade_size <valor>` \\- Tamanho do trade\n"
             "• `/set_stop_loss <valor>` \\- Stop loss \\(%\\)\n"
             "• `/report` \\- Relatório completo\n\n"
+            "*🚀 MODO TURBO:*\n"
+            "Use o botão no menu principal para ativar/desativar\n"
+            "• Trading agressivo com mais velocidade\n"
+            "• Monitoramento a cada 50ms\n"
+            "• Maior risco e recompensa\n\n"
             "*SUPORTE:* @SniperBotSupport"
         )
         
@@ -302,13 +307,68 @@ class TelegramBot:
             
     async def pause_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Comando /pause"""
-        # TODO: Implementar pausa temporária
-        await update.message.reply_text("⏸️ Funcionalidade de pausa em desenvolvimento")
+        if not advanced_sniper.is_running:
+            await update.message.reply_text("⚠️ Sniper não está ativo!")
+            return
+            
+        # Pausa temporariamente mas mantém posições
+        advanced_sniper.pause_strategy()
+        await update.message.reply_text(
+            "⏸️ *SNIPER PAUSADO*\n\n"
+            "• Novas entradas desabilitadas\n"
+            "• Posições ativas continuam monitoradas\n"
+            "• Use `/resume` para retomar",
+            parse_mode='MarkdownV2'
+        )
         
     async def resume_command(self, update: Update, context: ContextTypes.DEFAULT_TYPE):
         """Comando /resume"""
-        # TODO: Implementar retomada
-        await update.message.reply_text("▶️ Funcionalidade de retomada em desenvolvimento")
+        if not advanced_sniper.is_running:
+            await update.message.reply_text("⚠️ Sniper não está ativo!")
+            return
+            
+        if not advanced_sniper.is_paused:
+            await update.message.reply_text("⚠️ Sniper não está pausado!")
+            return
+            
+        advanced_sniper.resume_strategy()
+        await update.message.reply_text(
+            "▶️ *SNIPER RETOMADO*\n\n"
+            "• Novas entradas habilitadas\n"
+            "• Monitoramento completo ativo",
+            parse_mode='MarkdownV2'
+        )
+            
+    # ==================== MÉTODOS AUXILIARES ====================
+    
+    async def _emergency_stop(self, query):
+        """Para tudo imediatamente e fecha todas as posições"""
+        try:
+            # Para a estratégia
+            if advanced_sniper.is_running:
+                await advanced_sniper.stop_strategy()
+                
+            # Fecha todas as posições
+            positions = advanced_sniper.get_active_positions()
+            if positions:
+                for pos in positions:
+                    try:
+                        await advanced_sniper._execute_exit(pos, "PARADA DE EMERGÊNCIA")
+                    except Exception as e:
+                        logger.error(f"Erro fechando posição {pos.get('token_symbol', 'unknown')}: {e}")
+                        
+            await query.edit_message_text(
+                "🚨 *PARADA DE EMERGÊNCIA EXECUTADA*\n\n"
+                "• Sniper parado\n"
+                "• Todas as posições fechadas\n"
+                "• Sistema em modo seguro",
+                parse_mode='MarkdownV2'
+            )
+        except Exception as e:
+            logger.error(f"Erro na parada de emergência: {e}")
+            await query.edit_message_text(
+                f"❌ Erro na parada de emergência: {e}"
+            )
         
     # ==================== COMANDOS DE ANÁLISE ====================
     
@@ -667,19 +727,137 @@ class TelegramBot:
                 await query.edit_message_text("⚠️ Sniper já está parado!")
                 
         elif data == "show_status":
-            await self.status_command(update, context)
+            stats = advanced_sniper.get_performance_stats()
+            status_text = (
+                f"📊 *STATUS DO SNIPER BOT*\n\n"
+                f"*Estado:* {'🟢 Ativo' if advanced_sniper.is_running else '🔴 Parado'}\n"
+                f"*Modo Turbo:* {'🚀 ATIVO' if config.get('TURBO_MODE', False) else '🐢 Normal'}\n"
+                f"*Posições:* {stats['active_positions']}/{stats['max_positions']}\n"
+                f"*Total Trades:* {stats['total_trades']}\n"
+                f"*Taxa Acerto:* {stats['win_rate']:.1f}%\n"
+                f"*Lucro Total:* {stats['total_profit']:.4f} ETH\n"
+                f"*Melhor Trade:* {stats['best_trade']:.4f} ETH"
+            )
+            await query.edit_message_text(
+                status_text,
+                parse_mode='MarkdownV2',
+                reply_markup=self._build_status_menu()
+            )
             
         elif data == "show_balance":
-            await self.balance_command(update, context)
+            balance_info = get_wallet_status()
+            await query.edit_message_text(balance_info, parse_mode='MarkdownV2')
             
         elif data == "show_positions":
-            await self.positions_command(update, context)
+            positions = advanced_sniper.get_active_positions()
+            if not positions:
+                await query.edit_message_text("📭 Nenhuma posição ativa no momento")
+            else:
+                positions_text = "*🎯 POSIÇÕES ATIVAS:*\n\n"
+                for pos in positions:
+                    age_hours = (time.time() - pos['entry_time']) / 3600
+                    positions_text += (
+                        f"*{pos['token_symbol']}*\n"
+                        f"• PnL: `{pos['pnl_percentage']:+.1f}%`\n"
+                        f"• Valor: `{pos['current_value']:.4f}` ETH\n"
+                        f"• Idade: `{age_hours:.1f}h`\n\n"
+                    )
+                await query.edit_message_text(
+                    positions_text,
+                    parse_mode='MarkdownV2',
+                    reply_markup=self._build_positions_menu()
+                )
             
         elif data == "show_stats":
             await self.stats_command(update, context)
             
         elif data == "show_config":
-            await self.config_command(update, context)
+            config_text = (
+                f"⚙️ *CONFIGURAÇÕES DO BOT*\n\n"
+                f"*💰 TRADING:*\n"
+                f"• Trade Size: `{config['TRADE_SIZE_ETH']}` ETH\n"
+                f"• Take Profit: `{config['TAKE_PROFIT_PCT']*100:.0f}%`\n"
+                f"• Stop Loss: `{config['STOP_LOSS_PCT']*100:.0f}%`\n"
+                f"• Max Posições: `{advanced_sniper.max_positions}`\n"
+                f"• Modo Turbo: `{'✅ Ativo' if config.get('TURBO_MODE', False) else '❌ Inativo'}`\n\n"
+                f"*🔍 MEMECOINS:*\n"
+                f"• Max Investimento: `{config.get('MEMECOIN_MAX_INVESTMENT', 0.0008)}` ETH\n"
+                f"• Target Lucro: `{config.get('MEMECOIN_TARGET_PROFIT', 2.0)}x`\n"
+                f"• Min Holders: `{config.get('MEMECOIN_MIN_HOLDERS', 50)}`"
+            )
+            await query.edit_message_text(
+                config_text,
+                parse_mode='MarkdownV2',
+                reply_markup=self._build_config_menu()
+            )
+            
+        # Configurações específicas
+        elif data == "config_trade_size":
+            await query.edit_message_text(
+                "💰 *ALTERAR TRADE SIZE*\n\n"
+                f"Valor atual: `{config['TRADE_SIZE_ETH']}` ETH\n\n"
+                "Use o comando: `/set_trade_size <valor>`\n"
+                "Exemplo: `/set_trade_size 0\\.001`",
+                parse_mode='MarkdownV2',
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 Voltar", callback_data="show_config")
+                ]])
+            )
+            
+        elif data == "config_stop_loss":
+            await query.edit_message_text(
+                "🛡️ *ALTERAR STOP LOSS*\n\n"
+                f"Valor atual: `{config['STOP_LOSS_PCT']*100:.0f}%`\n\n"
+                "Use o comando: `/set_stop_loss <percentual>`\n"
+                "Exemplo: `/set_stop_loss 15`",
+                parse_mode='MarkdownV2',
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 Voltar", callback_data="show_config")
+                ]])
+            )
+            
+        elif data == "config_take_profit":
+            await query.edit_message_text(
+                "📈 *ALTERAR TAKE PROFIT*\n\n"
+                f"Valor atual: `{config['TAKE_PROFIT_PCT']*100:.0f}%`\n\n"
+                "Use o comando: `/set_take_profit <níveis>`\n"
+                "Exemplo: `/set_take_profit 25 50 100 200`",
+                parse_mode='MarkdownV2',
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 Voltar", callback_data="show_config")
+                ]])
+            )
+            
+        elif data == "config_max_positions":
+            await query.edit_message_text(
+                "🎯 *ALTERAR MAX POSIÇÕES*\n\n"
+                f"Valor atual: `{advanced_sniper.max_positions}`\n\n"
+                "Use o comando: `/set_max_positions <número>`\n"
+                "Exemplo: `/set_max_positions 3`",
+                parse_mode='MarkdownV2',
+                reply_markup=InlineKeyboardMarkup([[
+                    InlineKeyboardButton("🔙 Voltar", callback_data="show_config")
+                ]])
+            )
+            
+        # Modo Turbo
+        elif data == "toggle_turbo":
+            current_turbo = config.get("TURBO_MODE", False)
+            new_turbo = not current_turbo
+            
+            # Usa o método da estratégia para alternar turbo
+            advanced_sniper.toggle_turbo_mode(new_turbo)
+            
+            if new_turbo:
+                status_msg = "🚀 *MODO TURBO ATIVADO*\n\n⚡️ Trading agressivo ativado\n🔥 Monitoramento acelerado\n💰 Maior risco/recompensa"
+            else:
+                status_msg = "🐢 *MODO NORMAL ATIVADO*\n\n✅ Trading conservador\n🛡️ Proteções ativadas\n💚 Menor risco"
+                
+            await query.edit_message_text(
+                status_msg,
+                parse_mode='MarkdownV2',
+                reply_markup=self._build_main_menu()
+            )
             
         elif data == "emergency_stop":
             await self._emergency_stop(query)
@@ -731,6 +909,7 @@ class TelegramBot:
     
     def _build_main_menu(self):
         """Constrói menu principal"""
+        turbo_status = "🚀 TURBO ATIVO" if config.get("TURBO_MODE", False) else "🐢 Modo Normal"
         keyboard = [
             [
                 InlineKeyboardButton("🚀 Iniciar Sniper", callback_data="start_sniper"),
@@ -746,10 +925,13 @@ class TelegramBot:
             ],
             [
                 InlineKeyboardButton("⚙️ Configurações", callback_data="show_config"),
+                InlineKeyboardButton(turbo_status, callback_data="toggle_turbo")
+            ],
+            [
                 InlineKeyboardButton("🏓 Ping", callback_data="ping")
             ],
             [
-                InlineKeyboardButton("🚨 EMERGÊNCIA", callback_data="emergency_stop")
+                InlineKeyboardButton("🚨 PARADA DE EMERGÊNCIA", callback_data="emergency_stop")
             ]
         ]
         return InlineKeyboardMarkup(keyboard)
