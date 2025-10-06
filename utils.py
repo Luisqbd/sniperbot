@@ -22,7 +22,58 @@ except ImportError:
 
 from config import config
 
-# Adiciona funções necessárias para o sistema
+# --- Funções de Verificação de Conexão (Adicionadas para main_final.py) ---
+
+def check_web3_connection() -> bool:
+    """
+    Verifica se a conexão com o nó Web3 (RPC) está ativa.
+    """
+    if not WEB3_AVAILABLE:
+        logger.error("Biblioteca Web3 não está instalada. Verificação da conexão RPC falhou.")
+        return False
+    try:
+        # Usa a mesma chave de configuração que o resto do projeto
+        rpc_url = config.get("RPC_URL") or config.get("BASE_RPC_URL")
+        if not rpc_url:
+            logger.error("Nenhuma URL de RPC (RPC_URL ou BASE_RPC_URL) encontrada na configuração.")
+            return False
+            
+        w3 = Web3(Web3.HTTPProvider(rpc_url))
+        if w3.is_connected():
+            logger.info("Conexão com o nó Web3 (RPC) bem-sucedida.")
+            return True
+        else:
+            logger.error(f"Não foi possível conectar ao nó Web3 (RPC). Verifique a URL: {rpc_url}")
+            return False
+    except Exception as e:
+        logger.error(f"Erro ao verificar a conexão Web3: {e}", exc_info=True)
+        return False
+
+def check_telegram_bot() -> bool:
+    """
+    Verifica se o token do bot do Telegram é válido e se o bot está acessível.
+    """
+    # Usa a mesma chave de configuração que o resto do projeto
+    token = config.get("TELEGRAM_TOKEN") or config.get("TELEGRAM_BOT_TOKEN")
+    if not token:
+        logger.error("Nenhum token de Telegram (TELEGRAM_TOKEN ou TELEGRAM_BOT_TOKEN) encontrado na configuração.")
+        return False
+    
+    url = f"https://api.telegram.org/bot{token}/getMe"
+    try:
+        response = requests.get(url, timeout=10)
+        if response.status_code == 200 and response.json().get("ok"):
+            logger.info("Token do bot do Telegram é válido e a API está acessível.")
+            return True
+        else:
+            logger.error(f"Falha ao verificar o bot do Telegram. Status: {response.status_code}, Resposta: {response.text}")
+            return False
+    except requests.RequestException as e:
+        logger.error(f"Erro de rede ao verificar o bot do Telegram: {e}", exc_info=True)
+        return False
+
+# --- Restante do seu código original de utils.py ---
+
 def is_valid_address(address: str) -> bool:
     """Verifica se endereço é válido"""
     if not address or not isinstance(address, str):
